@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    # Using official PostgreSQL image with security updates
+    container_name: evently-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: evently
+      POSTGRES_USER: evently
+      POSTGRES_PASSWORD: evently_password
+    ports:
+      - "54321:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - evently-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evently"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Spring Boot Application
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: evently-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/evently
+      SPRING_DATASOURCE_USERNAME: evently
+      SPRING_DATASOURCE_PASSWORD: evently_password
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+    ports:
+      - "8080:8080"
+    networks:
+      - evently-network
+
+  # Frontend Next.js Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: evently-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8080
+    networks:
+      - evently-network
+
+networks:
+  evently-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
